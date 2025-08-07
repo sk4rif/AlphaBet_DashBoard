@@ -1,0 +1,325 @@
+import streamlit as st
+import pandas as pd
+import numpy as np
+from pymongo import MongoClient
+from zoneinfo import ZoneInfo
+import datetime
+import plotly.graph_objects as go
+from scipy.interpolate import RegularGridInterpolator
+from helpers.mongo import pull_data
+
+# --- CONFIGURATION ---
+PAGE_TITLE = "AlphaBet Dashboard"
+TIME_ZONE = ZoneInfo('Europe/London')
+REFRESH_INTERVAL = 120  # seconds
+MONGO_URI = "mongodb+srv://CarlGrimaldi:AlphaBeta21$@alphabetcluster.x7lvc.mongodb.net/"
+DB_NAME = "AlphaBet"
+HISTORY_COLLECTION = "HISTORY"
+PLOT_COLUMNS = [
+'position_value', 'allocation',
+    'Probability', 'Price', 'adjustments', 'Adjustment Ratio'
+]
+CURRENCIES = ["BTC", "ETH", "SOL", "XRP"]
+
+# Streamlit setup
+st.set_page_config(layout="wide", page_title=PAGE_TITLE)
+st.markdown("<style>.stApp{background-color:black;}</style>", unsafe_allow_html=True)
+
+# Auto-refresh
+if 'refresh_interval' not in st.session_state:
+    st.session_state.refresh_interval = REFRESH_INTERVAL
+st.empty().auto_refresh = True
+
+# --- DATA FETCHING ---
+def normalize_dates(start_date, end_date):
+    now = datetime.datetime.now(TIME_ZONE)
+    if end_date is None:
+        end_dt = now
+    else:
+        end_dt = datetime.datetime.combine(end_date, datetime.time(23, 59, 59), tzinfo=TIME_ZONE)
+    if start_date is None:
+        start_dt = end_dt - datetime.timedelta(days=7)
+    else:
+        start_dt = datetime.datetime.combine(start_date, datetime.time(0, 0), tzinfo=TIME_ZONE)
+    return start_dt, end_dt
+
+@st.cache_data(ttl=REFRESH_INTERVAL)
+def fetch_data(start_date=None, end_date=None):
+    try:
+        client = MongoClient(MONGO_URI)
+        col = client[DB_NAME][HISTORY_COLLECTION]
+        start_dt, end_dt = normalize_dates(start_date, end_date)
+        fmt = lambda dt: dt.strftime('%Y%m%d_%H%M%S')
+        query = {"_id": {"$gte": fmt(start_dt), "$lte": fmt(end_dt)}}
+
+        docs = list(col.find(query))
+        if not docs:
+            docs = list(col.aggregate([
+                {"$sort": {"_id": -1}},
+                {"$limit": 100}
+            ]))
+
+        records = []
+        for doc in docs:
+            ts = pd.to_datetime(doc['_id'], format='%Y%m%d_%H%M%S').tz_localize(TIME_ZONE)
+            info = doc.get('order_info', {})
+            info['timestamp'] = ts
+            records.append(info)
+            for order in doc.get('orders', []):
+                order['timestamp'] = ts
+                records.append(order)
+
+        df = pd.DataFrame(records)
+        if df.empty:
+            return df
+
+        df.set_index('timestamp', inplace=True)
+        df.sort_index(inplace=True)
+
+        # Calculate adjustment ratio
+        if {'adjustments', 'position_value'}.issubset(df.columns):
+            df['Adjustment Ratio'] = df['adjustments'] / df['position_value'].replace(0, np.nan)
+
+        # Filter to active questions
+        if 'current_position' in df.columns:
+            last_ts = df.index.max()
+            active_qs = df.loc[last_ts][
+                df.loc[last_ts]['current_position'] != 0]['question']
+            df = df[df['question'].isin(active_qs.unique())]
+
+        return df
+    except Exception as e:
+        st.error(f"Error fetching data: {e}")
+        return pd.DataFrame()
+
+# --- PLOTLY LAYOUT ---
+BASE_LAYOUT = dict(
+    template='plotly_dark', paper_bgcolor='black', plot_bgcolor='black',
+    xaxis=dict(title='Timestamp'), legend=dict(bgcolor='rgba(0,0,0,0)', x=1.02, y=1)
+)
+
+def create_base_fig(yaxis_title=None):
+    fig = go.Figure()
+    layout = BASE_LAYOUT.copy()
+    if yaxis_title:
+        layout['yaxis'] = dict(title=yaxis_title)
+    fig.update_layout(**layout)
+    return fig
+
+# --- OPTIMIZATION CHARTS ---
+def draw_weight_evolution(history, questions):
+    fig = create_base_fig('Weight')
+    for i, q in enumerate(questions):
+        fig.add_trace(go.Scatter(
+            y=[w[i] for w in history['weights']],
+            name=q,
+            mode='lines'
+        ))
+    return fig
+
+def draw_risk_metrics(history):
+    fig = create_base_fig('Risk Metrics')
+    # Add traces for metrics on primary y-axis
+    for metric in ['maturity', 'concentration', 'probability', 'theta']:
+        fig.add_trace(go.Scatter(
+            y=history[metric],
+            name=metric.capitalize(),
+            mode='lines'
+        ))
+    # Add volatility on secondary y-axis
+    fig.add_trace(go.Scatter(
+        y=history['volatility'],
+        name='Volatility',
+        mode='lines',
+        yaxis='y2'
+    ))
+    fig.update_layout(
+        yaxis2=dict(title='Volatility', overlaying='y', side='right')
+    )
+    return fig
+
+def draw_objective_metrics(history):
+    fig = create_base_fig('EV')
+    # Add EV and objective on primary y-axis
+    for metric in ['ev', 'objective']:
+        fig.add_trace(go.Scatter(
+            y=history[metric],
+            name=metric.upper() if metric == 'ev' else metric.capitalize(),
+            mode='lines'
+        ))
+    # Add risk on secondary y-axis
+    fig.add_trace(go.Scatter(
+        y=history['risk'],
+        name='Risk',
+        mode='lines',
+        yaxis='y2'
+    ))
+    fig.update_layout(
+        yaxis2=dict(title='Risk', overlaying='y', side='right')
+    )
+    return fig
+
+# --- CHARTS ---
+def draw_chart(df, col, stack=False):
+    fig = create_base_fig(yaxis_title=col)
+    if df.empty or col not in df.columns or 'question' not in df.columns:
+        fig.add_annotation(text=f"No data for '{col}'", showarrow=False)
+        return fig
+    pivot = df.pivot_table(index=df.index, columns='question', values=col, aggfunc='sum')
+    mode = 'lines+markers' if col in ['Probability', 'Price'] else 'lines'
+    group = 'one' if stack else None
+    for q, series in pivot.items():
+        data = series.dropna()
+        if not data.empty:
+            fig.add_trace(go.Scatter(x=data.index, y=data.values, mode=mode, name=q, stackgroup=group))
+    return fig
+
+def draw_portfolio(df):
+    fig = create_base_fig(yaxis_title="Value")
+    if df.empty or not {'cash', 'portfolio_value'}.issubset(df.columns):
+        fig.add_annotation(text="Missing portfolio data", showarrow=False)
+        return fig
+    cash = df['cash'].dropna()
+    assets = df['portfolio_value'].dropna()
+    if not cash.empty:
+        fig.add_trace(go.Scatter(x=cash.index, y=cash.values, mode='lines', name='cash', stackgroup='one'))
+    if not assets.empty:
+        fig.add_trace(go.Scatter(x=assets.index, y=assets.values, mode='lines', name='Assets', stackgroup='one'))
+    if not cash.empty and not assets.empty:
+        total = cash.reindex(df.index, fill_value=0) + assets.reindex(df.index, fill_value=0)
+        fig.add_trace(go.Scatter(x=total.index, y=total.values, mode='lines', name='Total', line=dict(dash='dash', width=2)))
+    return fig
+
+def draw_ev(df):
+    comp = create_base_fig(yaxis_title="EV")
+    for col in ['EV_target', 'EV_current']:
+        if col in df.columns:
+            data = df[col].dropna()
+            comp.add_trace(go.Scatter(x=data.index, y=data.values, mode='lines+markers', name=col))
+    improv = create_base_fig(yaxis_title="EV Improvement")
+    if 'EV_gain' in df.columns:
+        data = df['EV_gain'].dropna()
+        improv.add_trace(go.Scatter(x=data.index, y=data.values, mode='lines+markers', name='Improvement'))
+        improv.add_shape(type='line', x0=data.index.min(), y0=0, x1=data.index.max(), y1=0,
+                          line=dict(width=1, dash='dash', color='rgba(255,255,255,0.3)'))
+    return comp, improv
+
+def draw_question(df, q):
+    fig = create_base_fig(yaxis_title="Value")
+    qdf = df[df['question'].astype(str) == str(q)]
+    if qdf.empty:
+        fig.add_annotation(text=f"No data for {q}", showarrow=False)
+        return fig
+    for col in ['Probability', 'Price']:
+        if col in qdf.columns:
+            data = qdf[col].dropna()
+            fig.add_trace(go.Scatter(x=data.index, y=data.values, mode='lines+markers', name=col))
+    return fig
+
+def fetch_vol_surface(curr):
+    raw = pull_data(database=DB_NAME, sub_collection=curr, _id="SVI_IV")
+    taus = np.array(raw['Taus'], float)
+    strikes = np.array(raw['Strikes'], float)
+    iv = np.array(raw['SVI_IV'], float)
+    if taus.size and (taus[0] == 0 or np.isnan(iv[0]).all()):
+        taus, iv = taus[1:], iv[1:]
+    return taus, strikes, iv
+
+def draw_surface(taus, strikes, iv, curr):
+    fig = go.Figure(data=[go.Surface(x=strikes, y=taus, z=iv, showscale=True)])
+    fig.update_layout(title=f"{curr} SVI Surface",
+                      scene=dict(xaxis_title='Strike', yaxis_title='Tau', zaxis_title='IV'),
+                      paper_bgcolor='black')
+    return fig
+
+# --- APP ---
+def main():
+    now = datetime.datetime.now(TIME_ZONE)
+    sd = st.sidebar.date_input('Start Date', value=now.date() - datetime.timedelta(days=7))
+    ed = st.sidebar.date_input('End Date', value=now.date())
+    if sd > ed:
+        st.sidebar.error('Start <= End')
+        sd = ed - datetime.timedelta(days=1)
+
+    for label, days in [('24h',1),('7d',7),('30d',30),('90d',90)]:
+        if st.sidebar.button(f'Last {label}'):
+            sd, ed = (now - datetime.timedelta(days=days)).date(), now.date()
+
+    df = fetch_data(sd, ed)
+    if df.empty:
+        st.warning('No data for selected range.')
+        return
+
+    st.markdown(f"### Data: {sd} to {ed}")
+    tabs = st.tabs(['Main', 'EV', 'Questions', 'Surface', 'Optimisation'])
+
+    with tabs[0]:
+        st.subheader('Asset Under Management')
+        st.plotly_chart(draw_portfolio(df), use_container_width=True, key='portfolio_chart')
+        cols = st.columns(2)
+        for i, col in enumerate(PLOT_COLUMNS[:4]):
+            with cols[i%2]:
+                st.subheader(col)
+                st.plotly_chart(draw_chart(df, col, stack=(col not in ['Probability','Price'])), use_container_width=True, key=f'main_metric_{col}')
+        if st.checkbox('Show more metrics'):
+            for i, col in enumerate(PLOT_COLUMNS[4:]):
+                with cols[i%2]:
+                    st.subheader(col)
+                    st.plotly_chart(draw_chart(df, col, stack=(col not in ['Probability','Price'])), use_container_width=True, key=f'main_metric_{col}')
+
+    with tabs[1]:
+        comp, improv = draw_ev(df)
+        st.plotly_chart(comp, use_container_width=True, key='ev_comp_chart')
+        st.plotly_chart(improv, use_container_width=True, key='ev_improv_chart')
+
+    with tabs[2]:
+        # Ensure all questions are strings and drop NaNs
+        print(df.columns)
+        questions = sorted(df['question'].dropna().astype(str).unique())
+        search = st.text_input('Search questions').strip().lower()
+        if search:
+            questions = [q for q in questions if search in q.lower()]
+        total_pages = max(1, (len(questions)-1)//4 + 1)
+        page = st.number_input('Page', min_value=1, max_value=total_pages, value=1)
+        display_qs = questions[(page-1)*4 : page*4]
+        cols = st.columns(2)
+        for i, q in enumerate(display_qs):
+            with cols[i%2]:
+                st.subheader(q)
+                st.plotly_chart(draw_question(df, q), use_container_width=True, key=f'question_{q}')
+
+    with tabs[3]:
+        curr = st.selectbox('Currency', options=CURRENCIES)
+        taus, strikes, iv = fetch_vol_surface(curr)
+        if taus.size and strikes.size and iv.size:
+            st.plotly_chart(draw_surface(taus, strikes, iv, curr), use_container_width=True, key=f'surface_{curr}')
+        else:
+            st.error(f'No data for {curr}')
+
+    with tabs[4]:
+        try:
+            opti_data = pull_data("AlphaBet", "OPTI", "RESULTS")
+            if not opti_data or 'history' not in opti_data or 'questions' not in opti_data:
+                st.warning('No optimization data available.')
+                return
+            st.subheader('Weight Evolution')
+            st.plotly_chart(draw_weight_evolution(opti_data['history'], opti_data['questions']), use_container_width=True, key='weight_evolution')
+            
+            st.subheader('Risk Metrics Evolution')
+            st.plotly_chart(draw_risk_metrics(opti_data['history']), use_container_width=True, key='risk_metrics')
+            
+            st.subheader('Objective Metrics Evolution')
+            st.plotly_chart(draw_objective_metrics(opti_data['history']), use_container_width=True, key='objective_metrics')
+            
+            # Display optimization timestamp
+            if 'timestamp' in opti_data:
+                st.markdown(f"*Last optimization: {opti_data['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}*")
+        except Exception as e:
+            st.error('Failed to load optimization data. Please try again later.')
+            return
+
+    if st.sidebar.button('🔄 Refresh'):
+        st.experimental_rerun()
+
+if __name__ == '__main__':
+    main()
