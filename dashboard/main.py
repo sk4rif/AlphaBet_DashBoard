@@ -154,7 +154,7 @@ def main():
         The system implements Gatheral's Stochastic Volatility Inspired (SVI) parameterization:
         
         ```
-        σ²(k,τ) = a + b{ρ(k-m) + √[(k-m)² + σ²]}
+        σ²(k,τ) = a + b * (ρ(k-m) + √((k-m)² + σ²))
         ```
         
         #### Technical Features
@@ -190,7 +190,7 @@ def main():
         The system specializes in binary prediction markets rather than traditional options:
         
         ```
-        Probability = E[𝟙{S(T) > K}] where 𝟙 is the indicator function
+        Probability = E[I(S(T) > K)] where I is the indicator function
         Expected Value = Probability × Payout - Contract Cost
         ```
         
@@ -206,7 +206,7 @@ def main():
         The optimization engine balances multiple competing objectives:
         
         ```
-        Objective = Portfolio_EV - λ_risk × Portfolio_Risk - λ_concentration × HHI
+        Objective = Portfolio_EV - λ_risk * Portfolio_Risk - λ_concentration * HHI
         ```
         
         #### Components
@@ -218,7 +218,7 @@ def main():
         #### Risk Metrics
         - **Portfolio Volatility**: σ_portfolio = √(w^T Σ w) using dynamic correlation matrices
         - **Concentration Risk**: HHI = Σ(w_i²) measuring portfolio diversification
-        - **Theta Exposure**: Portfolio_Theta = Σ(w_i × θ_i) tracking time decay risk
+        - **Theta Exposure**: Portfolio_Theta = Σ(w_i * θ_i) tracking time decay risk
         - **Greeks Aggregation**: Delta, gamma, and vega exposure across all positions
         
         #### Optimization Constraints
@@ -241,7 +241,7 @@ def main():
         ```
         EV_Improvement = New_Portfolio_EV - Current_Portfolio_EV
         Transaction_Costs = Σ(Bid_Ask_Spreads + Market_Impact + Fees)
-        Rebalance_Threshold = Transaction_Costs × (1 + λ_buffer)
+        Rebalance_Threshold = Transaction_Costs * (1 + λ_buffer)
         Decision Rule: Rebalance if EV_Improvement > Rebalance_Threshold
         ```
         
