@@ -19,80 +19,73 @@ st.set_page_config(layout="wide", page_title=PAGE_TITLE)
 # Comprehensive pitch black background styling
 st.markdown("""
 <style>
+/* Force pitch black background on everything */
+* {
+    background-color: #000000 !important;
+}
+
 /* Main app background */
 .stApp {
     background-color: #000000 !important;
 }
 
-/* Sidebar background */
-.css-1d391kg {
-    background-color: #000000 !important;
-}
-
 /* Main content area */
-.main .block-container {
+.main, .main > div, .block-container {
     background-color: #000000 !important;
 }
 
-/* Sidebar content */
-.css-1lcbmhc {
+/* Sidebar */
+.css-1d391kg, .css-1lcbmhc, section[data-testid="stSidebar"] {
     background-color: #000000 !important;
 }
 
-/* Tab container */
-.stTabs [data-baseweb="tab-list"] {
+/* All divs and containers */
+div, section, main {
     background-color: #000000 !important;
 }
 
-/* Tab panels */
-.stTabs [data-baseweb="tab-panel"] {
-    background-color: #000000 !important;
-}
-
-/* Metric containers */
-.css-1r6slb0 {
+/* Tab containers and panels */
+.stTabs, .stTabs > div, .stTabs [data-baseweb="tab-list"], .stTabs [data-baseweb="tab-panel"] {
     background-color: #000000 !important;
 }
 
 /* Column containers */
-.css-12oz5g7 {
+[data-testid="column"] {
     background-color: #000000 !important;
 }
 
-/* All containers */
-div[data-testid="stVerticalBlock"] {
+/* Vertical blocks */
+[data-testid="stVerticalBlock"] {
     background-color: #000000 !important;
 }
 
-/* Header area */
+/* Header */
 header[data-testid="stHeader"] {
     background-color: #000000 !important;
 }
 
 /* Ensure text remains visible */
-.stMarkdown, .stText {
+.stMarkdown, .stText, h1, h2, h3, h4, h5, h6, p, span {
     color: #FFFFFF !important;
 }
 
-/* Input widgets background */
-.stSelectbox > div > div {
+/* Input widgets - darker but visible */
+.stSelectbox > div > div, .stDateInput > div > div, .stTextInput > div > div, .stNumberInput > div > div {
     background-color: #1a1a1a !important;
     color: #FFFFFF !important;
+    border: 1px solid #333333 !important;
 }
 
-.stDateInput > div > div {
+/* Buttons */
+.stButton > button {
     background-color: #1a1a1a !important;
     color: #FFFFFF !important;
+    border: 1px solid #333333 !important;
 }
 
-.stTextInput > div > div {
-    background-color: #1a1a1a !important;
-    color: #FFFFFF !important;
-}
-
-.stNumberInput > div > div {
-    background-color: #1a1a1a !important;
-    color: #FFFFFF !important;
+/* Override any white backgrounds */
+[style*="background-color: white"], [style*="background-color: #ffffff"], [style*="background-color: #FFFFFF"] {
+    background-color: #000000 !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -104,14 +97,12 @@ st.empty().auto_refresh = True
 
 def main():
     # Add logo to top left corner
-    col1, col2, col3 = st.columns([1, 6, 1])
+    col1, col2 = st.columns([1, 7])
     with col1:
         try:
             st.image("dashboard/utils/AlphaBet_Logo.png", width=120)
         except FileNotFoundError:
             st.write("AlphaBet")
-    with col2:
-        st.markdown("<h1 style='text-align: center; color: white; margin-top: 20px;'>AlphaBet Dashboard</h1>", unsafe_allow_html=True)
     
     now = datetime.datetime.now(TIME_ZONE)
     sd = st.sidebar.date_input('Start Date', value=now.date() - datetime.timedelta(days=7))
