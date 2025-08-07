@@ -15,7 +15,87 @@ from .components.surface_charts import draw_surface
 
 # Streamlit setup
 st.set_page_config(layout="wide", page_title=PAGE_TITLE)
-st.markdown("<style>.stApp{background-color:black;}</style>", unsafe_allow_html=True)
+
+# Comprehensive pitch black background styling
+st.markdown("""
+<style>
+/* Main app background */
+.stApp {
+    background-color: #000000 !important;
+}
+
+/* Sidebar background */
+.css-1d391kg {
+    background-color: #000000 !important;
+}
+
+/* Main content area */
+.main .block-container {
+    background-color: #000000 !important;
+}
+
+/* Sidebar content */
+.css-1lcbmhc {
+    background-color: #000000 !important;
+}
+
+/* Tab container */
+.stTabs [data-baseweb="tab-list"] {
+    background-color: #000000 !important;
+}
+
+/* Tab panels */
+.stTabs [data-baseweb="tab-panel"] {
+    background-color: #000000 !important;
+}
+
+/* Metric containers */
+.css-1r6slb0 {
+    background-color: #000000 !important;
+}
+
+/* Column containers */
+.css-12oz5g7 {
+    background-color: #000000 !important;
+}
+
+/* All containers */
+div[data-testid="stVerticalBlock"] {
+    background-color: #000000 !important;
+}
+
+/* Header area */
+header[data-testid="stHeader"] {
+    background-color: #000000 !important;
+}
+
+/* Ensure text remains visible */
+.stMarkdown, .stText {
+    color: #FFFFFF !important;
+}
+
+/* Input widgets background */
+.stSelectbox > div > div {
+    background-color: #1a1a1a !important;
+    color: #FFFFFF !important;
+}
+
+.stDateInput > div > div {
+    background-color: #1a1a1a !important;
+    color: #FFFFFF !important;
+}
+
+.stTextInput > div > div {
+    background-color: #1a1a1a !important;
+    color: #FFFFFF !important;
+}
+
+.stNumberInput > div > div {
+    background-color: #1a1a1a !important;
+    color: #FFFFFF !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # Auto-refresh
 if 'refresh_interval' not in st.session_state:
@@ -23,6 +103,16 @@ if 'refresh_interval' not in st.session_state:
 st.empty().auto_refresh = True
 
 def main():
+    # Add logo to top left corner
+    col1, col2, col3 = st.columns([1, 6, 1])
+    with col1:
+        try:
+            st.image("dashboard/utils/AlphaBet_Logo.png", width=120)
+        except FileNotFoundError:
+            st.write("AlphaBet")
+    with col2:
+        st.markdown("<h1 style='text-align: center; color: white; margin-top: 20px;'>AlphaBet Dashboard</h1>", unsafe_allow_html=True)
+    
     now = datetime.datetime.now(TIME_ZONE)
     sd = st.sidebar.date_input('Start Date', value=now.date() - datetime.timedelta(days=7))
     ed = st.sidebar.date_input('End Date', value=now.date())
