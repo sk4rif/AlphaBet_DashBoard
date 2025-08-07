@@ -129,206 +129,176 @@ def main():
         # AlphaBet: Quantitative Cryptocurrency Derivatives Trading System
         
         ## System Overview
-        AlphaBet is a production-grade algorithmic trading system for cryptocurrency derivatives and prediction markets. It employs advanced quantitative models with real-time execution and is primarily deployed on Polymarket, trading binary contracts tied to crypto price movements.
         
-        ---
+        AlphaBet is a production-grade algorithmic trading system designed for cryptocurrency derivatives and prediction markets, implementing advanced quantitative finance models with real-time execution capabilities. The system operates primarily on Polymarket, trading binary prediction contracts related to cryptocurrency price movements.
+        
+        ## Core Architecture
         
         ### 1. Market Data Infrastructure
         
-        **Multi-Exchange Aggregation**
-        - **Deribit**: Implied volatility and options structure (primary IV source)
-        - **Binance**: Spot and futures feeds for pricing
-        - **Bybit**: Futures data for cross-validation and arbitrage checks
-        - **Polymarket**: Prediction market contract and order book data
+        #### Multi-Exchange Data Aggregation
+        - **Deribit**: Primary source for implied volatility data and options market structure
+        - **Binance**: Spot and futures price feeds for underlying asset pricing
+        - **Bybit**: Additional futures data for cross-validation and arbitrage detection
+        - **Polymarket**: Prediction market contract data and order book information
         
-        **Real-Time Data Pipeline**
-        - WebSocket Connections: Asynchronous, auto-reconnecting streams
-        - Data Validation: Cross-exchange price verification, outlier detection
-        - MongoDB: Historical data persistence for backtesting and calibration
-        - Rate Limiting: Smart API usage to avoid throttling
-        
-        ---
+        #### Real-Time Data Pipeline
+        - **WebSocket Connections**: Asynchronous data streaming with automatic reconnection
+        - **Data Validation**: Cross-exchange price verification and outlier detection
+        - **Historical Data Persistence**: MongoDB storage for backtesting and model calibration
+        - **Rate Limiting**: Intelligent API management to avoid exchange restrictions
         
         ### 2. Volatility Surface Construction
         
-        **SVI Model (Gatheral)**
+        #### SVI Model Implementation
+        The system implements Gatheral's Stochastic Volatility Inspired (SVI) parameterization:
+        
         ```
-        σ²(k,τ) = a + b{ρ(k−m) + √((k−m)² + σ²)}
+        σ²(k,τ) = a + b{ρ(k-m) + √[(k-m)² + σ²]}
         ```
         
-        **Technical Highlights**
-        - Smile-by-Smile Fitting: SLSQP optimization
-        - Arbitrage Prevention: Calendar & butterfly constraints
-        - Real-Time Updates: Continuous recalibration from Deribit IV
-        - Interpolation: Cubic spline + bilinear surface construction
-        
-        **Pipeline**: Real-time IV ingestion → Outlier filtering → SVI calibration → 3D surface generation → MongoDB persistence
-        
-        ---
+        #### Technical Features
+        - **Smile-by-Smile Fitting**: Sequential Least Squares Programming (SLSQP) optimization
+        - **Arbitrage Prevention**: Calendar and butterfly arbitrage constraints
+        - **Real-Time Updates**: Continuous recalibration from live Deribit IV data
+        - **Surface Interpolation**: Cubic spline interpolation with bilinear surface construction
         
         ### 3. SJMCS: Stochastic Jump Monte Carlo Simulation
         
-        **Model Equation**
+        #### Jump-Diffusion Model
+        The core pricing engine implements a jump-diffusion process for cryptocurrency price evolution:
+        
         ```
-        dS(t) = μ(t)S(t)dt + σ(S,t)S(t)dW(t) + S(t−)θdN(t)
+        dS(t) = μ(t)S(t)dt + σ(S,t)S(t)dW(t) + S(t-)θdN(t)
         ```
         
-        Where:
-        - μ(t): Risk-neutral drift from futures curve
-        - σ(S,t): Local volatility from SVI surface
-        - λ: Poisson jump intensity (historical calibration)
-        - θ: Log-normal jump magnitude
+        #### Model Components
+        - **μ(t)**: Risk-neutral drift extracted from futures curve interpolation
+        - **σ(S,t)**: Local volatility interpolated from SVI surface in real-time
+        - **λ**: Poisson jump intensity calibrated from historical cryptocurrency data
+        - **θ**: Jump magnitude following log-normal distribution with mean reversion
         
-        **Performance Features**
-        - Numba JIT: 10x+ path generation speedup
-        - Log-Space Evolution: Numerical stability
-        - Batch Simulation: Efficient simulation for 100K+ paths
-        - Memory Optimization: Lean array processing
-        
-        ---
+        #### Advanced Simulation Features
+        - **Log-Space Evolution**: Ensures numerical stability and positive price guarantee
+        - **Dynamic Volatility Lookup**: Real-time surface interpolation during path evolution
+        - **Variance Reduction Techniques**: Antithetic variates and control variates for improved convergence
+        - **High-Performance Computing**: Numba JIT compilation enabling 100,000+ path simulations
         
         ### 4. Probability Estimation Engine
         
-        **Binary Market Modeling**
+        #### Binary Contract Modeling
+        The system specializes in binary prediction markets rather than traditional options:
         
-        For contracts like: "Bitcoin > $120,000 on Aug 4?"
-        ```python
-        probability = np.mean(simulated_final_prices > strike_price)
-        expected_value = probability * payout - contract_cost
+        ```
+        Probability = E[𝟙{S(T) > K}] where 𝟙 is the indicator function
+        Expected Value = Probability × Payout - Contract Cost
         ```
         
-        **Features**
-        - Monte Carlo Integration: Accurate tail estimation
-        - Barrier/Asian Contracts: Path-dependent support
-        - Dynamic Parameters: Time-varying volatility/jump intensity
-        - Cross-Asset Correlation: Multi-asset event modeling
-        
-        ---
+        #### Advanced Probability Techniques
+        - **Monte Carlo Integration**: Large-scale path simulation for accurate tail probability estimation
+        - **Path-Dependent Contracts**: Handles barrier and Asian-style contract features
+        - **Time-Dependent Parameters**: Dynamic jump intensity and volatility evolution
+        - **Multi-Asset Correlation**: Cross-asset contract probability estimation using correlation matrices
         
         ### 5. Portfolio Optimization Framework
         
-        **Objective Function**
+        #### Multi-Objective Optimization
+        The optimization engine balances multiple competing objectives:
+        
         ```
-        Objective = EV − λ_risk · Risk − λ_conc · HHI
+        Objective = Portfolio_EV - λ_risk × Portfolio_Risk - λ_concentration × HHI
         ```
         
-        **Optimization Components**
-        - Expected Value Maximization
-        - Risk Minimization: Volatility with correlation matrix
-        - Diversification: HHI-based concentration penalty
-        - Cost Modeling: Bid-ask spreads, impact, slippage
+        #### Components
+        - **Expected Value Maximization**: Probability-weighted payoff optimization across all contracts
+        - **Risk Minimization**: Volatility-based portfolio risk with full correlation matrix
+        - **Concentration Penalty**: Herfindahl-Hirschman Index (HHI) preventing over-concentration
+        - **Transaction Cost Integration**: Bid-ask spreads and market impact modeling
         
-        **Risk Metrics**
-        - Portfolio volatility: σ_portfolio = √(w^T Σ w)
-        - Concentration: HHI = Σw_i²
-        - Theta exposure: Σw_i · θ_i
+        #### Risk Metrics
+        - **Portfolio Volatility**: σ_portfolio = √(w^T Σ w) using dynamic correlation matrices
+        - **Concentration Risk**: HHI = Σ(w_i²) measuring portfolio diversification
+        - **Theta Exposure**: Portfolio_Theta = Σ(w_i × θ_i) tracking time decay risk
+        - **Greeks Aggregation**: Delta, gamma, and vega exposure across all positions
         
-        ---
+        #### Optimization Constraints
+        - **Position Limits**: Maximum allocation per contract (typically 5-10% of portfolio)
+        - **Liquidity Constraints**: Order book depth-based position sizing
+        - **Sector Limits**: Maximum exposure per cryptocurrency or event category
+        - **Kelly Criterion**: Fractional Kelly position sizing with uncertainty adjustments
         
         ### 6. Execution Engine
         
-        **Order Management**
-        - Integration: Direct Polymarket API (via py_clob_client)
-        - Order Types: Market, limit, conditional
-        - Slippage Estimation: Real-time modeling
-        - Fill Monitoring: Track partials & status
+        #### Order Management System
+        - **Polymarket Integration**: Direct API execution with sophisticated order routing
+        - **Order Types**: Market, limit, and conditional orders with partial fill handling
+        - **Slippage Modeling**: Real-time market impact estimation based on order book depth
+        - **Fill Monitoring**: Comprehensive order status tracking and execution quality analysis
         
-        **Rebalancing Logic**
-        ```python
-        ev_improvement = new_ev - current_ev
-        costs = bid_ask + impact + fees
-        should_rebalance = ev_improvement > costs * (1 + buffer)
+        #### Rebalancing Logic
+        The system employs sophisticated rebalancing decisions:
+        
         ```
-        
-        ---
+        EV_Improvement = New_Portfolio_EV - Current_Portfolio_EV
+        Transaction_Costs = Σ(Bid_Ask_Spreads + Market_Impact + Fees)
+        Rebalance_Threshold = Transaction_Costs × (1 + λ_buffer)
+        Decision Rule: Rebalance if EV_Improvement > Rebalance_Threshold
+        ```
         
         ### 7. Risk Management System
         
-        **Real-Time Monitoring**
-        - Portfolio Greeks aggregation
-        - Monte Carlo VaR
-        - Stress testing
-        - Dynamic correlation matrix
+        #### Real-Time Risk Monitoring
+        - **Portfolio Greeks**: Aggregated delta, theta, gamma, and vega exposure tracking
+        - **Value-at-Risk**: Monte Carlo simulation-based VaR calculation with multiple confidence levels
+        - **Stress Testing**: Scenario analysis under extreme market conditions and volatility spikes
+        - **Correlation Monitoring**: Dynamic correlation matrix updates and regime change detection
         
-        **Position-Level Risk**
-        ```python
-        contract_risk = volatility * size * sqrt(time_to_expiry)
-        portfolio_risk = sqrt(Σ w_i w_j σ_i σ_j ρ_ij)
-        ```
-        
-        ---
+        #### Position-Level Risk Assessment
+        - **Individual Contract Risk**: Volatility-adjusted position sizing based on time to expiry
+        - **Portfolio Risk**: Full correlation matrix-based risk calculation with cross-asset effects
+        - **Concentration Limits**: Real-time monitoring of single-contract and sector exposure
+        - **Drawdown Controls**: Dynamic position sizing based on recent performance metrics
         
         ### 8. Performance Analytics
         
-        **Streamlit Dashboard**
-        - Portfolio metrics, P&L, position tracker
-        - Risk analytics: surfaces, correlations, Greeks
-        - Optimization history: weights, objectives
-        - Attribution: contract & strategy-level insights
+        #### Real-Time Dashboard
+        - **Portfolio Metrics**: Live P&L, position details, and risk exposure visualization
+        - **Risk Analytics**: 3D volatility surfaces, correlation heatmaps, and Greeks exposure charts
+        - **Optimization History**: Weight evolution tracking and objective function convergence analysis
+        - **Performance Attribution**: Contract-level and strategy-level return decomposition
         
-        **KPIs**
-        - Sharpe / Info Ratios
-        - Max Drawdown
-        - Hit Rate
-        - EV Realization (actual vs forecasted)
+        #### Key Performance Indicators
+        - **Sharpe Ratio**: Risk-adjusted returns measurement with rolling window analysis
+        - **Information Ratio**: Active return per unit of tracking error versus benchmark
+        - **Maximum Drawdown**: Peak-to-trough loss analysis with recovery time tracking
+        - **Hit Rate**: Percentage of profitable positions with statistical significance testing
+        - **Expected Value Realization**: Actual versus predicted outcomes with model validation
         
-        ---
+        ### 9. Unique System Characteristics
         
-        ### 9. System Orchestration
+        #### Prediction Market Specialization
+        Unlike traditional options trading systems, AlphaBet is specifically designed for binary prediction markets:
         
-        **Execution Loop (launcher.py)**
-        ```python
-        def launch_AlphaBet():
-            while True:
-                for currency in currencies:
-                    get_vol_surface(currency)
-                    update_JDM_params(currency['BASE'])
-                PortfolioManager().start()
-        ```
+        - **Event-Based Contracts**: "Will Bitcoin reach $X by date Y?" with binary outcomes
+        - **Fixed Payout Structure**: Typically $1.00 for correct predictions, creating unique risk-return profiles
+        - **Probability-Centric Approach**: Focus on event probability estimation rather than traditional Greeks
+        - **Time-Sensitive Execution**: Contracts with specific expiration dates tied to real-world events
         
-        **Workflow**
-        1. Extract contracts (Polymarket)
-        2. Estimate probabilities (SJMCS)
-        3. Optimize portfolio weights
-        4. Rebalancing decision
-        5. Execute & monitor orders
-        6. Track performance and risk
+        #### Cryptocurrency Market Adaptation
+        - **High Volatility Modeling**: Jump-diffusion models specifically calibrated for crypto price dynamics
+        - **24/7 Operation**: Continuous trading and risk monitoring across global time zones
+        - **Cross-Exchange Arbitrage**: Multi-venue price discovery and execution optimization
+        - **Regulatory Compliance**: Designed for decentralized prediction market platforms
         
-        ---
+        #### Advanced Quantitative Features
+        - **Multi-Asset Correlation**: Cross-cryptocurrency correlation modeling for portfolio construction
+        - **Regime Detection**: Dynamic parameter adjustment based on market regime identification
+        - **Tail Risk Management**: Specialized handling of extreme events common in cryptocurrency markets
+        - **Model Validation**: Continuous backtesting and out-of-sample performance monitoring
         
-        ### 10. Technical Implementation
+        ## Conclusion
         
-        **Computing**
-        - Numba JIT: Accelerate simulation paths
-        - Vectorization: NumPy / pandas ops
-        - Async Processing: WebSocket, file I/O
-        - Memory Efficiency: Clean allocations
-        
-        **Reliability**
-        - Robust error handling
-        - System-wide logging
-        - MongoDB backups
-        - Exchange-aware API rate management
-        
-        ---
-        
-        ## Unique System Characteristics
-        
-        ### Prediction Market Specialization
-        - Event-driven contracts: "Will BTC hit $X by Y?"
-        - Binary outcomes: Fixed $1 payout
-        - Probability-centric: Not delta/vega
-        - Expiry-driven: Short- and medium-term focus
-        
-        ### Crypto-Specific Design
-        - Handles extreme volatility
-        - Operates 24/7
-        - Arbitrage-aware execution
-        - Designed for DeFi / decentralized platforms
-        
-        ---
-        
-        AlphaBet represents a modern, high-performance quantitative system tailored to the unique challenges and structures of cryptocurrency prediction markets. It blends traditional derivatives theory with modern computational finance techniques, providing a robust platform for research, execution, and portfolio management.
+        This system represents a cutting-edge quantitative trading platform that combines traditional derivatives pricing theory with modern computational finance techniques, specifically optimized for the unique characteristics of cryptocurrency prediction markets and binary outcome contracts.
         """)
     
     with tabs[1]:
