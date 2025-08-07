@@ -332,6 +332,9 @@ def main():
         """)
     
     with tabs[1]:
+        # FYI Notice about data retention
+        st.info("ℹ️ **FYI**: Data is currently wiped every week for maintenance purposes.")
+        
         st.subheader('Asset Under Management')
         st.plotly_chart(draw_portfolio(df), use_container_width=True, key='portfolio_chart')
         # Show weighted averages in a single graph
