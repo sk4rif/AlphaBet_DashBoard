@@ -344,7 +344,7 @@ def main():
         
         # Show remaining metrics
         cols = st.columns(2)
-        remaining_cols = [col for col in PLOT_COLUMNS[:4] if col not in ['probability', 'best_ask']]
+        remaining_cols = [col for col in PLOT_COLUMNS[:4] if col not in ['probability', 'best_bid']]
         for i, col in enumerate(remaining_cols):
             with cols[i%2]:
                 st.subheader(col)
@@ -353,7 +353,7 @@ def main():
             for i, col in enumerate(PLOT_COLUMNS[4:]):
                 with cols[i%2]:
                     st.subheader(col)
-                    st.plotly_chart(draw_chart(df, col, stack=(col not in ['Probability','best_ask'])), use_container_width=True, key=f'main_metric_{col}')
+                    st.plotly_chart(draw_chart(df, col, stack=(col not in ['Probability','best_bid'])), use_container_width=True, key=f'main_metric_{col}')
 
 
 
