@@ -18,15 +18,59 @@ def normalize_dates(start_date, end_date):
     return start_dt, end_dt
 
 @st.cache_data(ttl=REFRESH_INTERVAL)
-def fetch_data(start_date=None, end_date=None):
+def fetch_data(start_date=None, end_date=None, tab_type="main"):
     try:
         client = MongoClient(MONGO_URI)
         col = client[DB_NAME][HISTORY_COLLECTION]
         start_dt, end_dt = normalize_dates(start_date, end_date)
         fmt = lambda dt: dt.strftime('%Y%m%d_%H%M%S')
-        query = {"_id": {"$gte": fmt(start_dt), "$lte": fmt(end_dt)}}
-
-        docs = list(col.find(query))
+        
+        # Calculate 24 hours ago from now
+        now = datetime.datetime.now(TIME_ZONE)
+        twenty_four_hours_ago = now - datetime.timedelta(hours=24)
+        
+        if tab_type in ["questions", "optimization"]:
+            # For Questions and Optimization tabs: only fetch data from past 24 hours
+            query_start = max(start_dt, twenty_four_hours_ago)
+            query = {"_id": {"$gte": fmt(query_start), "$lte": fmt(end_dt)}}
+            docs = list(col.find(query))
+        elif tab_type == "main":
+            # For Main tab: use aggregation for data older than 24 hours
+            recent_query = {"_id": {"$gte": fmt(twenty_four_hours_ago), "$lte": fmt(end_dt)}}
+            old_query = {"_id": {"$gte": fmt(start_dt), "$lt": fmt(twenty_four_hours_ago)}}
+            
+            # Get recent data (last 24 hours) without aggregation
+            recent_docs = list(col.find(recent_query))
+            
+            # Get hourly aggregated data for older than 24 hours
+            old_docs = []
+            if start_dt < twenty_four_hours_ago:
+                old_docs = list(col.aggregate([
+                    {"$match": old_query},
+                    {"$addFields": {
+                        "hour_id": {
+                            "$substr": ["$_id", 0, 11]  # Extract YYYYMMDD_HH part
+                        }
+                    }},
+                    {"$group": {
+                        "_id": "$hour_id",
+                        "order_info": {"$first": "$order_info"},
+                        "orders": {"$first": "$orders"},
+                        "timestamp": {"$first": "$_id"}
+                    }},
+                    {"$sort": {"_id": 1}}
+                ]))
+                # Restore original _id format for consistency
+                for doc in old_docs:
+                    doc['_id'] = doc['timestamp']
+                    del doc['timestamp']
+            
+            docs = old_docs + recent_docs
+        else:
+            # Default behavior for other tabs
+            query = {"_id": {"$gte": fmt(start_dt), "$lte": fmt(end_dt)}}
+            docs = list(col.find(query))
+        
         if not docs:
             docs = list(col.aggregate([
                 {"$sort": {"_id": -1}},
@@ -108,6 +152,59 @@ def fetch_data(start_date=None, end_date=None):
     except Exception as e:
         st.error(f"Error fetching data: {e}")
         return pd.DataFrame()
+
+@st.cache_data(ttl=REFRESH_INTERVAL)
+def fetch_optimization_data():
+    """Fetch optimization data with 24-hour filtering at MongoDB level"""
+    try:
+        from helpers.mongo import MongoClient
+        import certifi
+        
+        # Connect to MongoDB
+        client = MongoClient(
+            "mongodb+srv://CarlGrimaldi:AlphaBeta21$@alphabetcluster.x7lvc.mongodb.net/",
+            tlsCAFile=certifi.where()
+        )
+        
+        db = client["AlphaBet"]
+        collection = db["OPTI"]
+        
+        # Calculate 24 hours ago
+        now = datetime.datetime.now(TIME_ZONE)
+        twenty_four_hours_ago = now - datetime.timedelta(hours=24)
+        
+        # Use aggregation to filter history data to last 24 hours
+        pipeline = [
+            {"$match": {"_id": "RESULTS"}},
+            {"$addFields": {
+                "filtered_history": {
+                    "$filter": {
+                        "input": "$history",
+                        "cond": {
+                            "$gte": [
+                                {"$dateFromString": {
+                                    "dateString": "$$this.timestamp",
+                                    "onError": twenty_four_hours_ago
+                                }},
+                                twenty_four_hours_ago
+                            ]
+                        }
+                    }
+                }
+            }},
+            {"$project": {
+                "history": "$filtered_history",
+                "questions": 1,
+                "timestamp": 1
+            }}
+        ]
+        
+        result = list(collection.aggregate(pipeline))
+        return result[0] if result else None
+        
+    except Exception as e:
+        st.error(f"Error fetching optimization data: {e}")
+        return None
 
 def fetch_vol_surface(curr):
     from helpers.mongo import pull_data

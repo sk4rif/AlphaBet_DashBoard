@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 from helpers.mongo import pull_data
 
 from .config import PAGE_TITLE, TIME_ZONE, REFRESH_INTERVAL, PLOT_COLUMNS, CURRENCIES
-from .utils.data_fetcher import fetch_data, fetch_vol_surface
+from .utils.data_fetcher import fetch_data, fetch_vol_surface, fetch_optimization_data
 from .utils.plot_utils import create_base_fig
 from .components.portfolio_charts import draw_portfolio, draw_chart
 from .components.ev_charts import draw_ev, draw_question
@@ -115,10 +115,9 @@ def main():
         if st.sidebar.button(f'Last {label}'):
             sd, ed = (now - datetime.timedelta(days=days)).date(), now.date()
 
-    df = fetch_data(sd, ed)
-    if df.empty:
-        st.warning('No data for selected range.')
-        return
+    # Store date range in session state for tab-specific data fetching
+    st.session_state.start_date = sd
+    st.session_state.end_date = ed
 
     st.markdown(f"### Data: {sd} to {ed}")
     tabs = st.tabs(['About', 'Main', 'Objective', 'Questions', 'Surface', 'Optimisation'])
@@ -302,6 +301,12 @@ def main():
         """)
     
     with tabs[1]:
+        # Fetch data specifically for Main tab with hourly aggregation
+        df = fetch_data(sd, ed, tab_type="main")
+        if df.empty:
+            st.warning('No data for selected range.')
+            return
+        
         # FYI Notice about data retention
         st.info("ℹ️ **FYI**: Data is currently wiped every week for maintenance purposes.")
         
@@ -358,16 +363,28 @@ def main():
 
 
     with tabs[2]:
-        ev_comp, obj_comp = draw_ev(df)
+        # Fetch data for Objective tab (no special filtering needed)
+        df_obj = fetch_data(sd, ed, tab_type="objective")
+        if df_obj.empty:
+            st.warning('No data for selected range.')
+            return
+        
+        ev_comp, obj_comp = draw_ev(df_obj)
         st.subheader('Expected Value Comparison')
         st.plotly_chart(ev_comp, use_container_width=True, key='ev_comp_chart')
         st.subheader('Objective Comparison')
         st.plotly_chart(obj_comp, use_container_width=True, key='obj_comp_chart')
 
     with tabs[3]:
+        # Fetch data for Questions tab with 24-hour filtering
+        df_questions = fetch_data(sd, ed, tab_type="questions")
+        if df_questions.empty:
+            st.warning('No data for selected range.')
+            return
+        
         # Get questions only from latest timestamp
-        latest_ts = df.index.max()
-        questions = sorted(df.loc[latest_ts]['question'].dropna().astype(str).unique())
+        latest_ts = df_questions.index.max()
+        questions = sorted(df_questions.loc[latest_ts]['question'].dropna().astype(str).unique())
         search = st.text_input('Search questions').strip().lower()
         if search:
             questions = [q for q in questions if search in q.lower()]
@@ -378,7 +395,7 @@ def main():
         for i, q in enumerate(display_qs):
             with cols[i%2]:
                 st.subheader(q)
-                st.plotly_chart(draw_question(df, q), use_container_width=True, key=f'question_{q}')
+                st.plotly_chart(draw_question(df_questions, q), use_container_width=True, key=f'question_{q}')
 
     with tabs[4]:
         curr = st.selectbox('Currency', options=CURRENCIES)
@@ -390,7 +407,8 @@ def main():
 
     with tabs[5]:
         try:
-            opti_data = pull_data("AlphaBet", "OPTI", "RESULTS")
+            # Use specialized function with 24-hour filtering at MongoDB level
+            opti_data = fetch_optimization_data()
             if not opti_data or 'history' not in opti_data or 'questions' not in opti_data:
                 st.warning('No optimization data available.')
                 return
