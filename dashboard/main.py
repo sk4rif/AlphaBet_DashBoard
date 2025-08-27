@@ -303,7 +303,7 @@ def main():
     
     with tabs[0]:
         # Calculate portfolio performance since Aug 8, 2025 at 1:22 PM
-        aug_8_datetime = datetime.datetime(2025, 8, 8, 13, 22, tzinfo=TIME_ZONE)
+        aug_8_datetime = datetime.datetime(2025, 8, 8, 1, 22, tzinfo=TIME_ZONE)
         aug_8_date = aug_8_datetime.date()
         aug_8_df = fetch_data(aug_8_date, aug_8_date)
         
