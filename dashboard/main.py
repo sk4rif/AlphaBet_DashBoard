@@ -310,7 +310,7 @@ def main():
         if not aug_8_df.empty and 'portfolio_value' in aug_8_df.columns:
             aug_8_value = aug_8_df['portfolio_value'].iloc[-1] if len(aug_8_df) > 0 else None
             current_value = df['portfolio_value'].iloc[-1] if 'portfolio_value' in df.columns and len(df) > 0 else None
-            
+            print(aug_8_value, current_value)
             if aug_8_value and current_value and aug_8_value > 0:
                 pct_increase = ((current_value - aug_8_value) / aug_8_value) * 100
                 st.info(f"📈 **Portfolio Performance**: {pct_increase:+.2f}% since August 8, 2025")
