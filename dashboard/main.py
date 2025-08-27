@@ -302,8 +302,9 @@ def main():
         """)
     
     with tabs[0]:
-        # Calculate portfolio performance since Aug 8, 2024
-        aug_8_date = datetime.date(2025, 8, 8)
+        # Calculate portfolio performance since Aug 8, 2025 at 1:22 PM
+        aug_8_datetime = datetime.datetime(2025, 8, 8, 13, 22, tzinfo=TIME_ZONE)
+        aug_8_date = aug_8_datetime.date()
         aug_8_df = fetch_data(aug_8_date, aug_8_date)
         
         if not aug_8_df.empty and 'portfolio_value' in aug_8_df.columns:
@@ -312,11 +313,11 @@ def main():
             
             if aug_8_value and current_value and aug_8_value > 0:
                 pct_increase = ((current_value - aug_8_value) / aug_8_value) * 100
-                st.info(f"📈 **Portfolio Performance**: {pct_increase:+.2f}% since August 8, 2024")
+                st.info(f"📈 **Portfolio Performance**: {pct_increase:+.2f}% since August 8, 2025")
             else:
-                st.info("📊 **Portfolio Performance**: Data unavailable for August 8, 2024 comparison")
+                st.info("📊 **Portfolio Performance**: Data unavailable for August 8, 2025 comparison")
         else:
-            st.info("📊 **Portfolio Performance**: Historical data unavailable for August 8, 2024 comparison")
+            st.info("📊 **Portfolio Performance**: Historical data unavailable for August 8, 2025 comparison")
         
         st.subheader('Asset Under Management')
         st.plotly_chart(draw_portfolio(df), use_container_width=True, key='portfolio_chart')
