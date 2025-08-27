@@ -303,7 +303,7 @@ def main():
     
     with tabs[0]:
         # Calculate portfolio performance since Aug 8, 2024
-        aug_8_date = datetime.date(2024, 8, 8)
+        aug_8_date = datetime.date(2025, 8, 8)
         aug_8_df = fetch_data(aug_8_date, aug_8_date)
         
         if not aug_8_df.empty and 'portfolio_value' in aug_8_df.columns:
