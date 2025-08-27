@@ -302,11 +302,13 @@ def main():
         """)
     
     with tabs[0]:
-
         aug_8_value = 160
-        current_value = df['AUM'].iloc[-1]
         
-        if aug_8_value and current_value and aug_8_value > 0:
+        # Get the most recent AUM value - check multiple possible columns
+
+        current_value = df['AUM'].iloc[-1]
+
+        if current_value is not None and aug_8_value > 0:
             pct_increase = ((current_value - aug_8_value) / aug_8_value) * 100
             st.info(f"📈 **Portfolio Performance**: {pct_increase:+.2f}% since August 8, 2025")
         else:
