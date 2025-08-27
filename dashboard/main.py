@@ -304,7 +304,7 @@ def main():
     with tabs[0]:
 
         aug_8_value = 160
-        current_value = df['portfolio_value'].iloc[-1] if 'portfolio_value' in df.columns and len(df) > 0 else None
+        current_value = df['AUM'].iloc[-1]
         
         if aug_8_value and current_value and aug_8_value > 0:
             pct_increase = ((current_value - aug_8_value) / aug_8_value) * 100
