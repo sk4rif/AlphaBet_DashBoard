@@ -27,7 +27,7 @@ def draw_question(df, q):
         fig.add_annotation(text=f"No data for {q}", showarrow=False)
         return fig
         
-    for col in ['probability', 'best_ask']:
+    for col in ['probability', 'best_bid']:
         if col in qdf.columns:
             data = qdf[col].dropna()
             fig.add_trace(go.Scatter(x=data.index, y=data.values, mode='lines+markers', name=col))
