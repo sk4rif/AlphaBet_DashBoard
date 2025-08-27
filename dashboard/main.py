@@ -304,15 +304,25 @@ def main():
     with tabs[0]:
         aug_8_value = 160
         
-        # Get the most recent AUM value - check multiple possible columns
-
-        current_value = df['AUM'].iloc[-1]
-
-        if current_value is not None and aug_8_value > 0:
-            pct_increase = ((current_value - aug_8_value) / aug_8_value) * 100
-            st.info(f"📈 **Portfolio Performance**: {pct_increase:+.2f}% since August 8, 2025")
-        else:
-            st.info("📊 **Portfolio Performance**: Data unavailable for August 8, 2025 comparison")
+        # Fetch AUM directly from MongoDB since filtering removes order_info rows
+        try:
+            from pymongo import MongoClient
+            from .config import MONGO_URI, DB_NAME, HISTORY_COLLECTION
+            
+            client = MongoClient(MONGO_URI)
+            col = client[DB_NAME][HISTORY_COLLECTION]
+            
+            # Get the most recent document with AUM
+            latest_doc = col.find_one(sort=[("_id", -1)])
+            current_value = latest_doc.get('order_info', {}).get('AUM') if latest_doc else None
+            
+            if current_value is not None and aug_8_value > 0:
+                pct_increase = ((current_value - aug_8_value) / aug_8_value) * 100
+                st.info(f"📈 **Portfolio Performance**: {pct_increase:+.2f}% since August 8, 2025")
+            else:
+                st.info("📊 **Portfolio Performance**: Data unavailable for August 8, 2025 comparison")
+        except Exception as e:
+            st.info("📊 **Portfolio Performance**: Error fetching AUM data")
     
         
         st.subheader('Asset Under Management')
