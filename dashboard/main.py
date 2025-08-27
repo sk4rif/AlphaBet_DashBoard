@@ -318,7 +318,7 @@ def main():
             
             if current_value is not None and aug_8_value > 0:
                 pct_increase = ((current_value - aug_8_value) / aug_8_value) * 100
-                st.info(f"📈 **Portfolio Performance**: {pct_increase:+.2f}% since August 8, 2025")
+                st.info(f"📈 **Portfolio Performance**: {pct_increase:+.2f}% since August 8, 2025 (start of the experiment)")
             else:
                 st.info("📊 **Portfolio Performance**: Data unavailable for August 8, 2025 comparison")
         except Exception as e:
